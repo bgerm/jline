@@ -424,7 +424,7 @@ public class ConsoleReader implements ConsoleOperations {
     int getCursorPosition() {
         // FIXME: does not handle anything but a line with a prompt
         // absolute position
-        return ((prompt == null) ? 0 : prompt.length()) + buf.cursor;
+        return ((prompt == null) ? 0 : prompt.replaceAll("^\\n+", "").length()) + buf.cursor;
     }
 
     public String readLine(final String prompt) throws IOException {
