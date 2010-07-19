@@ -424,7 +424,7 @@ public class ConsoleReader implements ConsoleOperations {
     int getCursorPosition() {
         // FIXME: does not handle anything but a line with a prompt
         // absolute position
-        return ((prompt == null) ? 0 : prompt.replaceAll("^\\n+", "").length()) + buf.cursor;
+        return ((prompt == null) ? 0 : getPromptLastLine().length()) + buf.cursor;
     }
 
     public String readLine(final String prompt) throws IOException {
@@ -442,6 +442,23 @@ public class ConsoleReader implements ConsoleOperations {
      * The default prompt that will be issued.
      */
     public String getDefaultPrompt() {
+        return prompt;
+    }
+
+    /**
+     * Returns the text after the last '\n'.  
+     * prompt is returned if no '\n' characters are present.
+     * null is returned if prompt is null.
+     */
+    private String getPromptLastLine() {
+        if (prompt == null) return null;
+
+        int last = prompt.lastIndexOf("\n");
+
+        if (last >= 0) {
+            return prompt.substring(last + 1, prompt.length());
+        }
+
         return prompt;
     }
 
