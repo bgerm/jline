@@ -762,7 +762,7 @@ public class ConsoleReader implements ConsoleOperations {
         short code = keybindings[c];
 
         if (debugger != null) {
-            // debug("    translated: " + (int) c + ": " + code);
+            debug("    translated: " + (int) c + ": " + code);
         }
 
         return new int[]{c, code};

@@ -8,6 +8,7 @@ package jline;
 
 import java.io.*;
 import java.util.*;
+import java.util.regex.*;
 
 /**
  *  <p>
@@ -39,11 +40,12 @@ public class UnixTerminal extends Terminal {
     private boolean echoEnabled;
     private String ttyConfig;
     private String ttyProps;
+    private String infoCmp;
     private long ttyPropsLastFetched;
-    private boolean backspaceDeleteSwitched = false;
+    private boolean deleteSendsBackspace = false;
+    private boolean backspaceSendsDelete = false;
     private static String sttyCommand =
         System.getProperty("jline.sttyCommand", "stty");
-
     
     String encoding = System.getProperty("input.encoding", "UTF-8");
     ReplayPrefixOneCharInputStream replayStream = new ReplayPrefixOneCharInputStream(encoding);
@@ -56,16 +58,50 @@ public class UnixTerminal extends Terminal {
             throw new RuntimeException(e);
         }
     }
-   
-    protected void checkBackspace(){
-        String[] splitConfig = ttyConfig.split(":|=");
-
-        if (splitConfig.length > 20 && "gfmt1".equals(splitConfig[0])) {
-            // BSD style stty -g format
-            backspaceDeleteSwitched = "7f".equals(splitConfig[20]);
-        } else if (splitConfig.length > 6) {
-            backspaceDeleteSwitched = "7f".equals(splitConfig[6]);
+  
+    private String getTERM() {
+        return System.getenv("TERM");
+    }
+    
+    private String getInfocmpField(String name) {
+        Pattern p = Pattern.compile("\\b" + name + "=([^,]+),");
+        Matcher m = p.matcher(infoCmp);
+        if (m.find()) {
+          return m.group(1);
         }
+        else {
+          return "";
+        }
+    }
+    private String getTtyField(String name) {
+        Pattern p = Pattern.compile("\\b" + name + "=([^:]*)");
+        Matcher m = p.matcher(ttyConfig);
+        if (m.find()) {
+          return m.group(1);
+        }
+        else {
+          return "";
+        }
+    }
+    private void infocmpDebug() {
+        ConsoleReader.debugger = new java.io.PrintWriter(System.out, true);
+        ConsoleReader.debug("infoCmp = " + infoCmp);
+        ConsoleReader.debug("TERM = " + getTERM() + ", kbs = " + getKbs() + ", kdch1 = " + getKdch1());
+    }
+    
+    // kbs is "what is sent when the backspace/delete-prev key is pressed"
+    // kdch1 is "what happens when the delete-next key is pressed"
+    private String getKbs() { return getInfocmpField("kbs"); }
+    private String getKdch1() { return getInfocmpField("kdch1"); }
+   
+    protected void checkBackspace() {
+        deleteSendsBackspace = getTtyField("erase").equals("7f");
+        // XXX
+        // if (condition)
+        //     backspaceSendsDelete = deleteSendsBackspace;
+        //
+        // ...is presumably needed for a full backspace/del swap.
+        // But on OSX this is doing the right thing as is.
     }
     
     /**
@@ -82,6 +118,9 @@ public class UnixTerminal extends Terminal {
                        && (ttyConfig.indexOf(":") == -1))) {
             throw new IOException("Unrecognized stty code: " + ttyConfig);
         }
+        
+        // infoCmp
+        infoCmp = getInfocmp(getTERM());
 
         checkBackspace();
 
@@ -127,11 +166,10 @@ public class UnixTerminal extends Terminal {
     public int readVirtualKey(InputStream in) throws IOException {
         int c = readCharacter(in);
 
-        if (backspaceDeleteSwitched)
-            if (c == DELETE)
-                c = BACKSPACE;
-            else if (c == BACKSPACE)
-                c = DELETE;
+        if (c == DELETE && deleteSendsBackspace)
+          c = BACKSPACE;
+        else if (c == BACKSPACE && backspaceSendsDelete)
+          c = DELETE;
 
         // in Unix terminals, arrow keys are represented by
         // a sequence of 3 characters. E.g., the up arrow
@@ -272,6 +310,10 @@ public class UnixTerminal extends Terminal {
     protected static String stty(final String args)
                         throws IOException, InterruptedException {
         return exec("stty " + args + " < /dev/tty").trim();
+    }
+    protected static String getInfocmp(final String args)
+                        throws IOException, InterruptedException {
+        return exec("infocmp " + args).trim();
     }
 
     /**
