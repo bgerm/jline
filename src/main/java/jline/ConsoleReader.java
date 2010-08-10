@@ -1170,6 +1170,17 @@ public class ConsoleReader implements ConsoleOperations {
         return str;
     }
 
+    /* Handle case where terminal does not move cursor to the next line
+     * when a character is inserted at the width of the terminal.  This also
+     * fixes backspace issue, where it assumes that the terminal is doing this.
+     */
+    private final void newlineAtWrap() throws IOException {
+        int width = getTermwidth();
+
+        if ((getCursorPosition() % width == 0) && getCurrentPosition() >= width)
+            printNewline();
+    }
+
     /**
      * Write out the specified string to the buffer and the output stream.
      */
@@ -1177,6 +1188,8 @@ public class ConsoleReader implements ConsoleOperations {
         buf.write(str);
         printString(str);
         drawBuffer();
+
+        newlineAtWrap();
     }
 
     /**
@@ -1206,6 +1219,8 @@ public class ConsoleReader implements ConsoleOperations {
             }
 
             drawBuffer();
+
+            newlineAtWrap();
         }
     }
 
@@ -1218,6 +1233,7 @@ public class ConsoleReader implements ConsoleOperations {
      */
     private final void drawBuffer(final int clear) throws IOException {
         // debug ("drawBuffer: " + clear);
+
         if (buf.cursor == buf.length() && clear == 0) {
             return;
         }
@@ -1236,6 +1252,7 @@ public class ConsoleReader implements ConsoleOperations {
         } else {
             back(chars.length);
         }
+
         flushConsole();
     }
 
@@ -1736,14 +1753,12 @@ public class ConsoleReader implements ConsoleOperations {
         flushConsole();
     }
 
-    /*
-    private int currentCol, currentRow;
-
-    private void getCurrentPosition() {
+    // return column position, reported by the terminal
+    private int getCurrentPosition() {
         // check for ByteArrayInputStream to disable for unit tests
         if (terminal.isANSISupported() && !(in instanceof ByteArrayInputStream)) {
             try {
-                printANSISequence("[6n");
+                printANSISequence("6n");
                 flushConsole();
                 StringBuffer b = new StringBuffer(8);
                 // position is sent as <ESC>[{ROW};{COLUMN}R
@@ -1754,15 +1769,14 @@ public class ConsoleReader implements ConsoleOperations {
                     }
                 }
                 String[] pos = b.toString().split(";");
-                currentRow = Integer.parseInt(pos[0]);
-                currentCol = Integer.parseInt(pos[1]);
+                return Integer.parseInt(pos[1]);
             } catch (Exception x) {
                 // no luck
-                currentRow = currentCol = -1;
             }
         }
+
+        return -1; // TODO: throw exception instead?
     }
-    */
 
     /**
      * Whether or not to add new commands to the history buffer.

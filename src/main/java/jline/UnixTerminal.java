@@ -137,6 +137,9 @@ public class UnixTerminal extends Terminal {
                     public void start() {
                         try {
                             restoreTerminal();
+                            // print a newline after the terminal exits.
+                            // this should probably be a configurable.
+                            System.out.println();
                         } catch (Exception e) {
                             consumeException(e);
                         }
