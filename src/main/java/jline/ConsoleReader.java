@@ -424,7 +424,7 @@ public class ConsoleReader implements ConsoleOperations {
     int getCursorPosition() {
         // FIXME: does not handle anything but a line with a prompt
         // absolute position
-        return ((prompt == null) ? 0 : getPromptLastLine().length()) + buf.cursor;
+        return ((prompt == null) ? 0 : lastLine(prompt).length()) + buf.cursor;
     }
 
     public String readLine(final String prompt) throws IOException {
@@ -446,20 +446,20 @@ public class ConsoleReader implements ConsoleOperations {
     }
 
     /**
-     * Returns the text after the last '\n'.  
-     * prompt is returned if no '\n' characters are present.
+     * Returns the substring after the last '\n'.  
+     * full string is returned if no '\n' characters are present.
      * null is returned if prompt is null.
      */
-    private String getPromptLastLine() {
-        if (prompt == null) return null;
+    private static String lastLine(String str) {
+        if (str == null) return null;
 
-        int last = prompt.lastIndexOf("\n");
+        int last = str.lastIndexOf("\n");
 
         if (last >= 0) {
-            return prompt.substring(last + 1, prompt.length());
+            return str.substring(last + 1, str.length());
         }
 
-        return prompt;
+        return str;
     }
 
     /**
@@ -490,6 +490,8 @@ public class ConsoleReader implements ConsoleOperations {
             if (!terminal.isSupported()) {
                 return readLine(in);
             }
+
+            String originalPrompt = this.prompt;
 
             final int NORMAL = 1;
             final int SEARCH = 2;
@@ -553,8 +555,9 @@ public class ConsoleReader implements ConsoleOperations {
                             // Set buffer and cursor position to the found string.
                             if (searchIndex != -1) {
                                 history.setCurrentIndex(searchIndex);
-                                setBuffer(history.current());
-                                buf.cursor = history.current().indexOf(searchTerm.toString());
+                                // TODO: set cursor position to the found string
+                                //setBuffer(history.current());
+                                //buf.cursor = history.current().indexOf(searchTerm.toString());
                             }
                             state = NORMAL;
                             break;
@@ -564,6 +567,7 @@ public class ConsoleReader implements ConsoleOperations {
                     if (state == SEARCH) {
                         if (searchTerm.length() == 0) {
                             printSearchStatus("", "");
+                            searchIndex = -1;
                         } else {
                             if (searchIndex == -1) {
                                 beep();
@@ -574,7 +578,7 @@ public class ConsoleReader implements ConsoleOperations {
                     }
                     // otherwise, restore the line
                     else {
-                        restoreLine();
+                        restoreLine(originalPrompt);
                     }
                 }
 
@@ -1808,17 +1812,35 @@ public class ConsoleReader implements ConsoleOperations {
         return this.usePagination;
     }
 
-    public void printSearchStatus(String searchTerm, String match) throws IOException {
-        int i = match.indexOf(searchTerm);
-        printString("\r(reverse-i-search) `" + searchTerm + "': " + match + "\u001b[K");
-        // FIXME: our ANSI using back() does not work here
-        printCharacters(BACKSPACE, match.length() - i);
+    /**
+     * Erases the current line with the existing prompt, then redraws the line 
+     * with the provided prompt and buffer 
+     * */
+    public void resetPromptLine(String prompt, String buffer) throws IOException {
+        // backspace all text, including prompt
+        buf.buffer.append(this.prompt);
+        buf.cursor += this.prompt.length();
+        this.prompt = "";
+        backspaceAll();
+
+        this.prompt = prompt;
+        redrawLine();
+        setBuffer(buffer);
+
         flushConsole();
     }
 
-    public void restoreLine() throws IOException {
-        printString("\u001b[2K"); // ansi/vt100 for clear whole line
-        redrawLine();
-        flushConsole();
+    public void printSearchStatus(String searchTerm, String match) throws IOException {
+        String prompt = "(reverse-i-search)`" + searchTerm + "': ";
+        String buffer = match;
+        resetPromptLine(prompt, buffer);
+    }
+
+    public void restoreLine(String originalPrompt) throws IOException {
+        // TODO move cursor to matched string
+        String prompt = lastLine(originalPrompt);
+        String buffer = buf.buffer.toString();
+
+        resetPromptLine(prompt, buffer);
     }
 }
